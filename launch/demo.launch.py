@@ -50,6 +50,7 @@ def generate_launch_description():
     backend = LaunchConfiguration('backend')
     bag = LaunchConfiguration('bag')
     rate = LaunchConfiguration('rate')
+    loop = LaunchConfiguration('loop')
     record = LaunchConfiguration('record')
     record_camera = LaunchConfiguration('record_camera')
     camera = LaunchConfiguration('camera')
@@ -86,6 +87,10 @@ def generate_launch_description():
                               description='Bag to replay. mode:=replay only.'),
         DeclareLaunchArgument('rate', default_value='1.0',
                               description='Replay speed multiplier.'),
+        DeclareLaunchArgument('loop', default_value='false',
+                              description='Restart the bag when it ends. Handy '
+                                          'for demos; the odometry detects the '
+                                          'backward time jump and resets.'),
         DeclareLaunchArgument('record', default_value='false',
                               description='Record raw inputs while running live.'),
         DeclareLaunchArgument('record_camera', default_value='false',
@@ -187,8 +192,17 @@ def generate_launch_description():
 
         # --- replay ----------------------------------------------------------
         ExecuteProcess(
-            condition=is_replay,
+            condition=IfCondition(PythonExpression(
+                ["'", mode, "' == 'replay' and not '", loop,
+                 "'.lower() in ('true','1')"])),
             cmd=['ros2', 'bag', 'play', bag, '--clock', '--rate', rate],
+            output='screen',
+        ),
+        ExecuteProcess(
+            condition=IfCondition(PythonExpression(
+                ["'", mode, "' == 'replay' and '", loop,
+                 "'.lower() in ('true','1')"])),
+            cmd=['ros2', 'bag', 'play', bag, '--clock', '--rate', rate, '--loop'],
             output='screen',
         ),
     ])

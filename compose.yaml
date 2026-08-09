@@ -83,4 +83,5 @@ services:
       mode:=replay
       bag:=/bag
       rate:=${RATE:-1.0}
+      loop:=${LOOP:-false}
       backend:=${BACKEND:-cartographer}

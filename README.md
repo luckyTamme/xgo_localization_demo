@@ -58,6 +58,18 @@ BAG=./bags/run                  docker compose --profile replay up
 BAG=./bags/run BACKEND=rtabmap  docker compose --profile replay up
 ```
 
+### Looping a replay
+
+`LOOP=true` restarts the bag when it ends, which is handy for an unattended
+display. It does distort one thing, so know it before you read anything into it:
+on each restart the odometry detects the backward time jump and resets to the
+origin, while the SLAM backend keeps its accumulated map. `map -> odom` then has
+to absorb the whole discrepancy in a single step, so the `odom` frame visibly
+snaps across the map. Localisation is fine; the correction is not, and anyone
+watching TF will reasonably think something is broken.
+
+Use a single pass at a slower `RATE` when you actually want to judge the output.
+
 ### Bag size
 
 The camera dominates a recording by roughly an order of magnitude — on a
@@ -81,6 +93,7 @@ All are environment variables read by `compose.yaml`.
 | `BACKEND` | `cartographer` | `cartographer` or `rtabmap` |
 | `BAG` | `./bags/run` | bag to replay (replay profile) |
 | `RATE` | `1.0` | replay speed |
+| `LOOP` | `false` | restart the bag when it ends — see the caveat below |
 | `RECORD` | `false` | record raw inputs while running live |
 | `RECORD_CAMERA` | `false` | include the camera in recordings |
 | `CAMERA` | `true` | run the camera at all |
@@ -160,6 +173,17 @@ You want `level: 0` and a message like `map->odom fresh (0.03 s old)`. `level: 1
 for the first few seconds is normal while the backend converges; `level: 2` means
 no IMU is arriving and the pose is frozen.
 
+### The Lichtblick layout
+
+[`lichtblick/localization.json`](lichtblick/localization.json) has four panels: a
+3D view (occupancy grid, laser scan, and the `map` and `base_laser` frames), the
+diagnostics summary, the raw pose, and the camera. Import it after connecting.
+
+The `odom` frame is hidden by default because when everything is healthy it sits
+on top of `map` and adds nothing. Switch it on when a backend misbehaves — the
+gap between `map` and `odom` *is* the correction, so it is the first thing worth
+looking at.
+
 See the [node's README](https://github.com/luckyTamme/xgo_localization#health-and-diagnostics)
 for the full diagnostics schema and a troubleshooting table.
 
@@ -183,13 +207,16 @@ for the full diagnostics schema and a troubleshooting table.
 ## Developing against it
 
 Iterate on the node without rebuilding — it is pure Python, so mount your
-checkout over the installed copy in a `docker-compose.override.yml` (gitignored):
+checkout over the installed copy in a `docker-compose.override.yml` (gitignored).
+Note the path: the workspace is built with `--merge-install`, so packages live in
+a shared `lib/`, not a per-package one. Mounting the wrong path silently creates
+an unused directory and the container keeps running the baked-in code.
 
 ```yaml
 services:
   replay:
     volumes:
-      - ../xgo_localization/xgo_localization:/ws/install/xgo_localization/lib/python3.12/site-packages/xgo_localization:ro
+      - ../xgo_localization/xgo_localization:/ws/install/lib/python3.12/site-packages/xgo_localization:ro
 ```
 
 Changing deployment instead? Build locally and point compose at it:
