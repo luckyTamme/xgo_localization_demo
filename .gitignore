@@ -1,0 +1,7 @@
+bags/
+docker-compose.override.yml
+.DS_Store
+__pycache__/
+
+# Planning notes, local only
+plan.md

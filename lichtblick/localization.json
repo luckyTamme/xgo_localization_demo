@@ -1,0 +1,97 @@
+{
+  "configById": {
+    "3D!main": {
+      "layers": {
+        "grid": {
+          "layerId": "foxglove.Grid",
+          "position": [0, 0, 0],
+          "size": 10,
+          "divisions": 20
+        }
+      },
+      "followMode": "follow-pose",
+      "followTf": "map",
+      "scene": {
+        "transforms": {
+          "showLabel": true,
+          "axisScale": 0.5
+        }
+      },
+      "transforms": {
+        "frame:map": { "visible": true },
+        "frame:odom": { "visible": true },
+        "frame:base_link": { "visible": true },
+        "frame:base_laser": { "visible": true }
+      },
+      "topics": {
+        "/localization/map": { "visible": true, "colorMode": "costmap" },
+        "/scan": { "visible": true, "colorField": "intensity", "pointSize": 3 },
+        "/localization/pose": { "visible": true, "type": "arrow", "color": "#f04a4a" }
+      },
+      "cameraState": {
+        "distance": 12,
+        "perspective": true,
+        "phi": 45,
+        "thetaOffset": 0,
+        "targetOffset": [0, 0, 0],
+        "fovy": 45,
+        "near": 0.05,
+        "far": 5000
+      }
+    },
+    "DiagnosticSummary!health": {
+      "topicToRender": "/diagnostics",
+      "minLevel": 0,
+      "pinnedIds": [],
+      "hardwareIdFilter": "xgo_localization",
+      "sortByLevel": true
+    },
+    "RawMessages!pose": {
+      "topicPath": "/localization/pose.pose.pose.position",
+      "expansion": "all"
+    },
+    "Plot!drift": {
+      "paths": [
+        {
+          "value": "/localization/pose.pose.covariance[0]",
+          "label": "x variance",
+          "timestampMethod": "receiveTime"
+        }
+      ],
+      "showLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "Image!camera": {
+      "cameraTopic": "/camera/image_raw/compressed",
+      "transformMarkers": false,
+      "synchronize": false
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "first": "3D!main",
+    "second": {
+      "first": "DiagnosticSummary!health",
+      "second": {
+        "first": "RawMessages!pose",
+        "second": {
+          "first": "Plot!drift",
+          "second": "Image!camera",
+          "direction": "column",
+          "splitPercentage": 50
+        },
+        "direction": "column",
+        "splitPercentage": 35
+      },
+      "direction": "column",
+      "splitPercentage": 25
+    },
+    "direction": "row",
+    "splitPercentage": 62
+  }
+}

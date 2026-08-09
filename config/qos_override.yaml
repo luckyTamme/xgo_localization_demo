@@ -1,0 +1,15 @@
+# QoS overrides for `ros2 bag record --qos-profile-overrides-path`.
+# Only topics that need a non-default recorder QoS are listed; every other
+# topic uses rosbag2's auto-detected publisher QoS.
+#
+# /xgo/applied_vel is published by the xgo2_ros driver as
+#   KeepLast(1), RELIABLE, TRANSIENT_LOCAL (latched)
+# and only on each /cmd_vel. A default (volatile) recorder subscription can
+# silently miss a latched topic; match the publisher's durability so the
+# latched last-value and all subsequent samples are captured. Depth bumped to
+# 10 for headroom. (Missing this topic was the original recording bug.)
+/xgo/applied_vel:
+  history: keep_last
+  depth: 10
+  reliability: reliable
+  durability: transient_local

@@ -1,0 +1,86 @@
+# Two profiles, one image family.
+#
+#   live    on the robot   — drivers, camera, localisation, viewer bridge
+#   replay  anywhere       — a bag instead of hardware
+#
+#   docker compose --profile live up
+#   BAG=./bags/run docker compose --profile replay up
+#
+# The images are published, so neither profile builds anything.
+
+x-common: &common
+  environment:
+    ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+  # Without shared IPC, FastDDS' shared-memory transport fails in a way that is
+  # genuinely hard to diagnose: `ros2 topic info` shows publisher and subscriber
+  # matched, while no message is ever delivered.
+  ipc: host
+
+services:
+  live:
+    <<: *common
+    profiles: [live]
+    image: ${IMAGE:-ghcr.io/luckytamme/xgo-localization-demo:robot}
+    container_name: xgo-localization
+    # Host networking so DDS and the viewer socket reach the LAN. Robot only —
+    # Docker Desktop on macOS does not support it, and it is unreliable on
+    # Windows, which is why the replay profile publishes a port instead.
+    network_mode: host
+    restart: unless-stopped
+    devices:
+      # XGO mainboard on the PL011 UART. Needs `dtoverlay=disable-bt` in
+      # /boot/firmware/config.txt to free it from Bluetooth. See the README.
+      - /dev/ttyAMA0:/dev/ttyAMA0
+      # STL-19P LiDAR over its CP2102 USB bridge.
+      - /dev/ttyUSB0:/dev/ttyUSB0
+      # The set libcamera walks for the OV5647. Drop this block and set
+      # `camera:=false` in the command if the camera is not fitted.
+      - /dev/video0:/dev/video0
+      - /dev/video10:/dev/video10
+      - /dev/video11:/dev/video11
+      - /dev/video12:/dev/video12
+      - /dev/video13:/dev/video13
+      - /dev/video14:/dev/video14
+      - /dev/video15:/dev/video15
+      - /dev/video16:/dev/video16
+      - /dev/video18:/dev/video18
+      - /dev/video20:/dev/video20
+      - /dev/video21:/dev/video21
+      - /dev/video22:/dev/video22
+      - /dev/video23:/dev/video23
+      - /dev/media0:/dev/media0
+      - /dev/media1:/dev/media1
+      - /dev/media2:/dev/media2
+      - /dev/media3:/dev/media3
+      - /dev/media4:/dev/media4
+      - /dev/dma_heap/linux,cma:/dev/dma_heap/linux,cma
+      - /dev/dma_heap/system:/dev/dma_heap/system
+    volumes:
+      - /run/udev:/run/udev:ro
+      - ./bags:/bags
+    # libcamera forks an IPA proxy that the default seccomp profile blocks.
+    security_opt:
+      - seccomp=unconfined
+    command: >
+      ros2 launch /demo/launch/demo.launch.py
+      mode:=live
+      backend:=${BACKEND:-cartographer}
+      record:=${RECORD:-false}
+      record_camera:=${RECORD_CAMERA:-false}
+      camera:=${CAMERA:-true}
+
+  replay:
+    <<: *common
+    profiles: [replay]
+    image: ${IMAGE:-ghcr.io/luckytamme/xgo-localization-demo:latest}
+    container_name: xgo-localization-replay
+    ports:
+      - "8765:8765"
+    volumes:
+      - ${BAG:-./bags/run}:/bag:ro
+    command: >
+      ros2 launch /demo/launch/demo.launch.py
+      mode:=replay
+      bag:=/bag
+      rate:=${RATE:-1.0}
+      backend:=${BACKEND:-cartographer}
