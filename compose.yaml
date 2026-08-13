@@ -27,14 +27,28 @@ services:
     # Windows, which is why the replay profile publishes a port instead.
     network_mode: host
     restart: unless-stopped
+    # `ros2 bag record` finalises its mcap on SIGINT. Docker's default stop
+    # signal is SIGTERM, under which it exits without writing metadata.yaml and
+    # the recording is unreadable — `ros2 bag info` and `play` both refuse it.
+    # Ctrl-C on a foreground `up` already sends SIGINT; this makes `stop` and
+    # `down` behave the same, so a recording cannot be lost by stopping the
+    # stack the other documented way. The grace period covers flushing a large
+    # bag before Docker escalates to SIGKILL.
+    stop_signal: SIGINT
+    stop_grace_period: 30s
     devices:
       # XGO mainboard on the PL011 UART. Needs `dtoverlay=disable-bt` in
       # /boot/firmware/config.txt to free it from Bluetooth. See the README.
       - /dev/ttyAMA0:/dev/ttyAMA0
       # STL-19P LiDAR over its CP2102 USB bridge.
       - /dev/ttyUSB0:/dev/ttyUSB0
-      # The set libcamera walks for the OV5647. Drop this block and set
-      # `camera:=false` in the command if the camera is not fitted.
+      # The set libcamera walks for the OV5647. It enumerates a whole media
+      # graph, not just the capture node, and aborts the process outright if any
+      # member is missing — so this list has to be complete. video19, video31
+      # and v4l-subdev0 belong to the unicam entity behind /dev/media3; without
+      # them camera_node dies on startup while the rest of the stack carries on,
+      # which reads as "the camera panel is empty" and nothing worse.
+      # Drop this block and set `camera:=false` if the camera is not fitted.
       - /dev/video0:/dev/video0
       - /dev/video10:/dev/video10
       - /dev/video11:/dev/video11
@@ -44,10 +58,13 @@ services:
       - /dev/video15:/dev/video15
       - /dev/video16:/dev/video16
       - /dev/video18:/dev/video18
+      - /dev/video19:/dev/video19
       - /dev/video20:/dev/video20
       - /dev/video21:/dev/video21
       - /dev/video22:/dev/video22
       - /dev/video23:/dev/video23
+      - /dev/video31:/dev/video31
+      - /dev/v4l-subdev0:/dev/v4l-subdev0
       - /dev/media0:/dev/media0
       - /dev/media1:/dev/media1
       - /dev/media2:/dev/media2
@@ -68,12 +85,17 @@ services:
       record:=${RECORD:-false}
       record_camera:=${RECORD_CAMERA:-false}
       camera:=${CAMERA:-true}
+      bag_name:=${BAG_NAME:-run}
 
   replay:
     <<: *common
     profiles: [replay]
     image: ${IMAGE:-ghcr.io/luckytamme/xgo-localization-demo:latest}
     container_name: xgo-localization-replay
+    # LOOP=true works by replaying once and exiting, so that each pass gets a
+    # backend with no accumulated state; this is what brings the next pass up.
+    # A single pass never exits on its own, so it is unaffected.
+    restart: unless-stopped
     ports:
       - "8765:8765"
     volumes:

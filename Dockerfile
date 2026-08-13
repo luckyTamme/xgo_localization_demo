@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # --- the artifact -----------------------------------------------------------
 # Fetched by SHA. Bump this one ARG to take a new version of the node; the
 # change is visible in the diff and the image rebuilds from here down.
-ARG NODE_SHA=ca8acfbb9743ec746065f5170422a6d475eaec09
+ARG NODE_SHA=f12dffaa56c593c22b8ddc2c6058e05f55b36e21
 RUN mkdir -p /ws/src/xgo_localization && cd /ws/src/xgo_localization && \
     git init -q && \
     git remote add origin https://github.com/luckyTamme/xgo_localization && \

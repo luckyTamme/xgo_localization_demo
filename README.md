@@ -45,10 +45,17 @@ Record once on the robot, replay many times at a desk. A recording holds **raw
 sensor inputs only** — never the SLAM output — so the same bag can be pushed
 through either backend afterwards and the results compared.
 
+That is also why `/tf` is *not* recorded: during a live run it carries the
+backend's own `map -> odom`, and replaying that would put the recorded answer and
+the live backend on the same TF edge at once. Nothing is lost — the stack
+regenerates `odom -> base_link` from the IMU and applied velocity, and the
+backend recomputes `map -> odom` from `/scan`.
+
 ```bash
 # 1. on the robot: drive and record
 RECORD=true docker compose --profile live up
 #    Ctrl-C when done  ->  ./bags/run/
+#    (`docker compose stop`/`down` finalise the bag just as cleanly)
 
 # 2. copy it to your machine
 rsync -avP <user>@<robot>:~/xgo_localization_demo/bags/run ./bags/
@@ -60,15 +67,22 @@ BAG=./bags/run BACKEND=rtabmap  docker compose --profile replay up
 
 ### Looping a replay
 
-`LOOP=true` restarts the bag when it ends, which is handy for an unattended
-display. It does distort one thing, so know it before you read anything into it:
-on each restart the odometry detects the backward time jump and resets to the
-origin, while the SLAM backend keeps its accumulated map. `map -> odom` then has
-to absorb the whole discrepancy in a single step, so the `odom` frame visibly
-snaps across the map. Localisation is fine; the correction is not, and anyone
-watching TF will reasonably think something is broken.
+`LOOP=true` plays the bag over and over, which is what an unattended display
+wants. Each pass is a **complete fresh run**: the bag plays once, the stack shuts
+down, and the container comes straight back up with an empty backend. So every
+pass localises from scratch and reads exactly like a single pass — healthy
+diagnostics, a map built from nothing, no accumulated state carried across.
 
-Use a single pass at a slower `RATE` when you actually want to judge the output.
+The cost is a few seconds of gap between passes while the container restarts.
+That is deliberate. The obvious implementation — `ros2 bag play --loop` — rewinds
+the clock underneath a backend that has no notion of going backwards:
+cartographer only ever advances its trajectory time, so after the first rewind it
+drops every scan as already-seen and never emits another `map -> odom` again. The
+display sits there frozen and permanently degraded, looking like a localisation
+bug rather than a replay artefact.
+
+`RATE` still applies per pass. Use a single pass at a slower `RATE` when you want
+to study the output rather than leave it running.
 
 ### Bag size
 
@@ -95,6 +109,7 @@ All are environment variables read by `compose.yaml`.
 | `RATE` | `1.0` | replay speed |
 | `LOOP` | `false` | restart the bag when it ends — see the caveat below |
 | `RECORD` | `false` | record raw inputs while running live |
+| `BAG_NAME` | `run` | name of the recording under `./bags/`. rosbag2 will not write into a directory that already exists, so change this (or move the old run aside) to record again — the launch refuses to start otherwise rather than coming up and recording nothing |
 | `RECORD_CAMERA` | `false` | include the camera in recordings |
 | `CAMERA` | `true` | run the camera at all |
 | `ROS_DOMAIN_ID` | `42` | DDS domain |
@@ -172,6 +187,12 @@ docker compose --profile replay exec replay bash -lc 'ros2 topic echo /diagnosti
 You want `level: 0` and a message like `map->odom fresh (0.03 s old)`. `level: 1`
 for the first few seconds is normal while the backend converges; `level: 2` means
 no IMU is arriving and the pose is frozen.
+
+Run these *while the bag is still playing*. A single-pass replay stops the sim
+clock when it reaches the end, and every node stops publishing with it — so
+`--once` afterwards waits for a message that will never come and simply hangs.
+That is the clock having stopped, not the stack having failed. `LOOP=true` keeps
+it moving.
 
 ### The Lichtblick layout
 
